@@ -1,0 +1,16 @@
+{
+  "name": "budget",
+  "version": "0.0.0",
+  "description": "Server-side part of budget bot for me",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "budget"
+  ],
+  "author": "byTimo",
+  "license": "ISC"
+}
