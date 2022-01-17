@@ -19,7 +19,6 @@ export class GoogleAuthScene {
     async code(ctx: TelegrafContext) {
         if (isMessageUpdate(ctx.update) && isTextMessage(ctx.update.message)) {
             const code = ctx.update.message.text;
-            console.log(code);
             try {
                 await this.googleAuth.restoreToken(code);
                 await ctx.reply("Все получилось :)");

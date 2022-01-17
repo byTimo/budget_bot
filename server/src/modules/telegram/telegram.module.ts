@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, Logger } from "@nestjs/common";
 import { ConfigModule } from "../config/config.module";
 import { ConfigService } from "../config/config.service";
 import { session } from "telegraf";
@@ -8,6 +8,8 @@ import { TelegramUpdate } from "./telegram.update";
 import { StatusScene } from "./scenes/StatusScene";
 import { GoogleAuthModule } from "../google/auth/googleAuth.module";
 import { GoogleAuthScene } from "./scenes/GoogleAuthScene";
+import { LoggerModule } from "../logger/logger.module";
+import { telegrafLogger } from "./middlewares/logger.middleware";
 
 const scenes = [
     MainScene,
@@ -18,11 +20,11 @@ const scenes = [
 @Module({
     imports: [
         TelegrafModule.forRootAsync({
-            imports: [ConfigModule],
-            inject: [ConfigService],
-            useFactory: (config: ConfigService) => ({
+            imports: [ConfigModule, LoggerModule],
+            inject: [ConfigService, Logger],
+            useFactory: (config: ConfigService, logger: Logger) => ({
                 token: config.telegramToken,
-                middlewares: [session()],
+                middlewares: [session(), telegrafLogger(logger)],
             })
         }),
         GoogleAuthModule,

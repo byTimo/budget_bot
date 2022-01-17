@@ -5,6 +5,7 @@ const TOKEN = "TELEGRAM_TOKEN";
 const GOOGLE_CLIENT_ID = "GOOGLE_CLIENT_ID";
 const GOOGLE_CLIENT_SECRET = "GOOGLE_CLIENT_SECRET";
 const GOOGLE_SHEETS_ID = "GOOGLE_SHEETS_ID";
+const GOOGLE_AUTH_TOKEN_PATH = "GOOGLE_AUTH_TOKEN_PATH";
 
 @Injectable()
 export class ConfigService {
@@ -25,6 +26,10 @@ export class ConfigService {
 
     public get googleSheetsId(): string {
         return this.getOrThrow(GOOGLE_SHEETS_ID);
+    }
+
+    public get googleAuthTokenPath(): string | undefined {
+        return this.configService.get<string>(GOOGLE_AUTH_TOKEN_PATH);
     }
 
     private getOrThrow<T>(path: string): T {

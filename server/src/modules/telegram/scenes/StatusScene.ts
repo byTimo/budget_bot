@@ -10,10 +10,9 @@ export class StatusScene {
 
     @SceneEnter()
     async enter(ctx: TelegrafContext) {
-        console.log(this.googleAuth.q());
-        const isAuthorized = Object.keys(this.googleAuth.q()).length > 0;
-        await ctx.replyWithMarkdownV2(`Состояние сервиса
-        Google OAuth: ${isAuthorized}`, {
+        const googleAuthStatus = this.googleAuth.getStatus();
+        await ctx.reply(`Состояние сервиса
+        Google OAuth: ${googleAuthStatus}`, {
             reply_markup: {
                 inline_keyboard: [
                     [{ text: "На главную", callback_data: "back" }]
