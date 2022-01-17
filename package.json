@@ -4,7 +4,7 @@
   "description": "Server-side part of budget bot for me",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "cd server/ && npm run start:dev"
   },
   "keywords": [
     "telegram",

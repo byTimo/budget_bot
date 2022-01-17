@@ -25,11 +25,14 @@
     "@nestjs/config": "^1.1.6",
     "@nestjs/core": "^8.0.0",
     "@nestjs/platform-express": "^8.0.0",
+    "googleapis": "^92.0.0",
+    "nest-winston": "^1.6.2",
     "nestjs-telegraf": "^2.4.0",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "rxjs": "^7.2.0",
-    "telegraf": "^4.5.2"
+    "telegraf": "^4.5.2",
+    "winston": "^3.4.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^8.0.0",
