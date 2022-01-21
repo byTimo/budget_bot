@@ -1,12 +1,18 @@
 import { Scene, SceneEnter, Hears } from "nestjs-telegraf";
-import { SCENES } from "../telegram.constants";
 import { TelegrafContext } from "../../../types/telegraf";
 import { GoogleAuthService } from "../../google/auth/googleAuth.service";
 import { isMessageUpdate, isTextMessage } from "../../../utils/telegraf";
 
-@Scene(SCENES.GOOGLE_AUTH)
+const SCENE_ID = "GOOGLE_AUTH_SCENE";
+
+//TODO (byTimo) Перехеать на wizard
+@Scene(SCENE_ID)
 export class GoogleAuthScene {
     constructor(private readonly googleAuth: GoogleAuthService) {
+    }
+
+    static enter(ctx: TelegrafContext) {
+        return ctx.scene.enter(SCENE_ID);
     }
 
     @SceneEnter()
@@ -22,7 +28,7 @@ export class GoogleAuthScene {
             try {
                 await this.googleAuth.restoreToken(code);
                 await ctx.reply("Все получилось :)");
-                await ctx.scene.enter(SCENES.MAIN);
+                await ctx.scene.leave();
             } catch (e) {
                 console.error(e);
                 await ctx.reply(`Ошибка: ${e}`);

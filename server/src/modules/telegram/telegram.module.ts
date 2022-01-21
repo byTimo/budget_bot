@@ -3,18 +3,23 @@ import { ConfigModule } from "../config/config.module";
 import { ConfigService } from "../config/config.service";
 import { session } from "telegraf";
 import { TelegrafModule } from "nestjs-telegraf";
-import { MainScene } from "./scenes/MainScene";
+import { SettingsScene } from "./scenes/SettingsScene";
 import { TelegramUpdate } from "./telegram.update";
 import { StatusScene } from "./scenes/StatusScene";
 import { GoogleAuthModule } from "../google/auth/googleAuth.module";
 import { GoogleAuthScene } from "./scenes/GoogleAuthScene";
 import { LoggerModule } from "../logger/logger.module";
 import { telegrafLogger } from "./middlewares/logger.middleware";
+import { ExpensesWizard } from "./wizards/ExpensesWizard";
 
 const scenes = [
-    MainScene,
+    SettingsScene,
     StatusScene,
     GoogleAuthScene,
+];
+
+const wizards = [
+    ExpensesWizard,
 ];
 
 @Module({
@@ -28,10 +33,12 @@ const scenes = [
             })
         }),
         GoogleAuthModule,
+        LoggerModule,
     ],
     providers: [
         TelegramUpdate,
         ...scenes,
+        ...wizards,
     ]
 })
 export class TelegramModule {}

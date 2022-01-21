@@ -1,15 +1,20 @@
 import { Scene, SceneEnter, Action } from "nestjs-telegraf";
-import { SCENES } from "../telegram.constants";
 import { TelegrafContext } from "../../../types/telegraf";
 import { GoogleAuthService } from "../../google/auth/googleAuth.service";
 
-@Scene(SCENES.STATUS)
+const SCENE_ID = "STATUS_SCENE";
+
+@Scene(SCENE_ID)
 export class StatusScene {
     constructor(private readonly googleAuth: GoogleAuthService) {
     }
 
+    static enter(ctx: TelegrafContext): Promise<unknown> {
+        return ctx.scene.enter(SCENE_ID);
+    }
+
     @SceneEnter()
-    async enter(ctx: TelegrafContext) {
+    async handleEnter(ctx: TelegrafContext) {
         const googleAuthStatus = this.googleAuth.getStatus();
         await ctx.reply(`Состояние сервиса
         Google OAuth: ${googleAuthStatus}`, {
@@ -22,7 +27,7 @@ export class StatusScene {
     }
 
     @Action("back")
-    async back(ctx: TelegrafContext) {
-        await ctx.scene.enter(SCENES.MAIN);
+    async handleBackAction(ctx: TelegrafContext) {
+        await ctx.scene.leave();
     }
 }
