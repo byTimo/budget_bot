@@ -10,14 +10,14 @@ const REDIRECT_URL = "urn:ietf:wg:oauth:2.0:oob";
 
 @Injectable()
 export class GoogleAuthService {
-    private readonly auth: OAuth2Client;
+    private readonly _auth: OAuth2Client;
 
     constructor(
         private readonly config: ConfigService,
         private readonly files: FilesService,
         private readonly logger: Logger
     ) {
-        this.auth = new google.auth.OAuth2(config.googleClientId, config.googleClientSecret);
+        this._auth = new google.auth.OAuth2(config.googleClientId, config.googleClientSecret);
         this.tryAuthorizeBySavedToken();
     }
 
@@ -30,12 +30,12 @@ export class GoogleAuthService {
         const result = await this.files.read(this.config.googleAuthTokenPath, "utf8");
         if (result.success) {
             const credentials: Credentials = JSON.parse(result.data);
-            this.auth.setCredentials(credentials);
+            this._auth.setCredentials(credentials);
         }
     }
 
     public generateAuthUrl(): string {
-        return this.auth.generateAuthUrl({
+        return this._auth.generateAuthUrl({
             access_type: "offline",
             scope: SCOPES,
             redirect_uri: REDIRECT_URL,
@@ -43,12 +43,12 @@ export class GoogleAuthService {
     }
 
     public async restoreToken(code: string): Promise<void> {
-        const response = await this.auth.getToken({
+        const response = await this._auth.getToken({
             code,
             client_id: this.config.googleClientId,
             redirect_uri: REDIRECT_URL,
         });
-        this.auth.setCredentials(response.tokens);
+        this._auth.setCredentials(response.tokens);
 
         if (!this.config.googleAuthTokenPath) {
             this.logger.warn(`There isn't path to google auth token`);
@@ -60,6 +60,10 @@ export class GoogleAuthService {
     }
 
     public getStatus(): string {
-        return "access_token" in this.auth.credentials ? "authorized" : "unauthorized";
+        return "access_token" in this._auth.credentials ? "authorized" : "unauthorized";
+    }
+
+    public get auth() {
+        return this._auth;
     }
 }

@@ -29,6 +29,7 @@ export class GoogleAuthScene {
                 await this.googleAuth.restoreToken(code);
                 await ctx.reply("Все получилось :)");
                 await ctx.scene.leave();
+                return;
             } catch (e) {
                 console.error(e);
                 await ctx.reply(`Ошибка: ${e}`);

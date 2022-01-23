@@ -25,6 +25,6 @@ export class TelegramUpdate {
         }
         const text = ctx.update.message.text;
         const sum = parseFloat(text);
-        await ExpensesWizard.enter(ctx, sum);
+        await ExpensesWizard.enter(ctx, { sum });
     }
 }

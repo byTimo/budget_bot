@@ -1,10 +1,24 @@
-import { WizardStep, Action, SceneEnter, Wizard } from "nestjs-telegraf";
-import { TelegrafContext, TelegrafWizardContext } from "../../../types/telegraf";
-import { isCallbackQueryUpdate, isDataCallbackQuery } from "../../../utils/telegraf";
+import { Action, Scene, SceneEnter, Hears } from "nestjs-telegraf";
+import { TelegrafContext, TelegrafSceneContext } from "../../../types/telegraf";
+import {
+    isCallbackQueryUpdate,
+    isDataCallbackQuery,
+    restoreSessionData,
+    isMessageUpdate,
+    isTextMessage
+} from "../../../utils/telegraf";
 import { Scenes, Markup } from "telegraf";
 import { Logger } from "@nestjs/common";
+import { CategoriesService } from "../../categories/categories.service";
+import { CallbackQuery } from "typegram/callback";
+import { Message } from "telegraf/typings/core/types/typegram";
+import { parse, isMatch, add, format } from "date-fns";
 
 const SCENE_ID = "EXPENSES_WIZARD";
+
+export interface ExpensesInitialState {
+    sum: number;
+}
 
 interface ExpensesWizardData extends Scenes.WizardSessionData {
     sum?: number;
@@ -12,76 +26,114 @@ interface ExpensesWizardData extends Scenes.WizardSessionData {
     category?: string;
 }
 
+const dateFormat = "dd.MM.yyyy";
+
 //TODO (byTimo) общее решение по логированию шагов визардов и сцен
-@Wizard(SCENE_ID)
+@Scene(SCENE_ID)
 export class ExpensesWizard {
-    constructor(private readonly logger: Logger) {
+    constructor(private readonly logger: Logger, private readonly categories: CategoriesService) {
     }
 
-    static enter(ctx: TelegrafContext, sum: number): Promise<unknown> {
-        return ctx.scene.enter(SCENE_ID, { sum });
+    static async enter(ctx: TelegrafContext, initialState: ExpensesInitialState) {
+        await ctx.scene.enter(SCENE_ID, initialState);
     }
 
     @SceneEnter()
-    async handleEnter(ctx: TelegrafWizardContext<ExpensesWizardData>) {
-        //TODO (byTimo) оч странно это перекладывать
-        ctx.scene.session.sum = (ctx.scene.state as any).sum;
+    async handleEnter(ctx: TelegrafSceneContext<ExpensesWizardData>) {
+        restoreSessionData<ExpensesWizardData, ExpensesInitialState>(ctx, x => x);
+        const categories = await this.categories.popular();
+        ctx.scene.session.category = categories[0];
+        ctx.scene.session.date = format(new Date(), dateFormat);
 
-        await ctx.reply(`- ${ctx.scene.session.sum} -\nDate:`, {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: "20.01.2021", callback_data: "20.01.2021" }],
-                    [{ text: "19.01.2021", callback_data: "20.01.2021" }],
-                    [{ text: "18.01.2021", callback_data: "20.01.2021" }],
-                    [{ text: "17.01.2021", callback_data: "20.01.2021" }],
-                ]
-            }
-        });
+        return this.display(ctx);
     }
 
-    @WizardStep(1)
-    @Action(/\d\d\.\d\d\.\d\d\d\d/)
-    async resolveDateByAction(ctx: TelegrafWizardContext<ExpensesWizardData>) {
-        if (!isCallbackQueryUpdate(ctx.update) || !isDataCallbackQuery(ctx.update.callback_query)) {
-            return;
+    @Action(/.*/)
+    @Hears(/.*/)
+    async handle(ctx: TelegrafSceneContext<ExpensesWizardData>): Promise<void> {
+        if (isCallbackQueryUpdate(ctx.update) && isDataCallbackQuery(ctx.update.callback_query)) {
+            return this.handleCallbackQuery(ctx.update.callback_query, ctx);
         }
 
-        ctx.scene.session.date = ctx.update.callback_query.data;
-        ctx.wizard.next();
-
-        await ctx.reply(`${ctx.scene.session.date} ${ctx.scene.session.sum} -\nCategory:`, {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: "Продукты", callback_data: "Продукты" }],
-                    [{ text: "Транспорт", callback_data: "Транспорт" }],
-                    [{ text: "Еда", callback_data: "Еда" }],
-                ]
-            }
-        });
+        if (isMessageUpdate(ctx.update) && isTextMessage(ctx.update.message)) {
+            return this.handleTextMessage(ctx.update.message, ctx);
+        }
     }
 
-    @WizardStep(2)
-    @Action(/.+/)
-    async resolveCategoryByAction(ctx: TelegrafWizardContext<ExpensesWizardData>) {
-        if (!isCallbackQueryUpdate(ctx.update) || !isDataCallbackQuery(ctx.update.callback_query)) {
-            return;
+    private async handleCallbackQuery(
+        callbackQuery: CallbackQuery.DataCallbackQuery,
+        ctx: TelegrafSceneContext<ExpensesWizardData>
+    ): Promise<void> {
+        if (callbackQuery.data === "ok") {
+            await ctx.editMessageText(
+                `${this.format(ctx)}\n\nТранзакция сохранена`,
+                { ...Markup.inlineKeyboard([]), parse_mode: "HTML" }
+            );
+            return ctx.scene.leave();
         }
 
-        ctx.scene.session.category = ctx.update.callback_query.data;
-        ctx.wizard.next();
+        if (isMatch(callbackQuery.data, dateFormat)) {
+            return this.modifyDate(callbackQuery.data, ctx, true);
+        }
 
-        await ctx.reply(
-            `${ctx.scene.session.date} ${ctx.scene.session.sum} ${ctx.scene.session.category}\nOK?:`,
-            Markup.inlineKeyboard([
-                Markup.button.callback("Ok", "/ok"),
-            ])
-        );
+        return this.modifyCategory(callbackQuery.data, ctx, true);
     }
 
-    @WizardStep(3)
-    @Action("/ok")
-    async resolveApproveByAction(ctx: TelegrafWizardContext<ExpensesWizardData>) {
-        await ctx.reply(`${ctx.scene.session.date} ${ctx.scene.session.sum} ${ctx.scene.session.category} was written`);
-        await ctx.scene.leave();
+    private handleTextMessage(
+        message: Message.TextMessage,
+        ctx: TelegrafSceneContext<ExpensesWizardData>
+    ): Promise<void> {
+        if (isMatch(message.text, dateFormat)) {
+            return this.modifyDate(message.text, ctx, false);
+        }
+
+        return this.modifyCategory(message.text, ctx, false);
+    }
+
+    private modifyDate(date: string, ctx: TelegrafSceneContext<ExpensesWizardData>, update: boolean): Promise<void> {
+        ctx.scene.session.date = date;
+        return this.display(ctx, update);
+    }
+
+    private modifyCategory(
+        category: string,
+        ctx: TelegrafSceneContext<ExpensesWizardData>,
+        update: boolean
+    ): Promise<void> {
+        ctx.scene.session.category = category;
+        return this.display(ctx, update);
+    }
+
+    private async display(ctx: TelegrafSceneContext<ExpensesWizardData>, update = false): Promise<void> {
+        const { date, sum, category } = ctx.scene.session;
+        const categories = await this.categories.popular();
+
+        const dateButtons = Array.from({ length: 4 })
+            .map((_, i) => format(add(parse(date!, dateFormat, new Date()), { days: -i - 1 }), dateFormat))
+            .map(x => Markup.button.callback(x, x));
+
+        const categoryButtons = categories
+            .filter(x => x !== category)
+            .slice(0, 4)
+            .map(x => Markup.button.callback(x, x));
+
+        const markup = Markup.inlineKeyboard([
+            Markup.button.callback("Ok", "ok"),
+            ...dateButtons,
+            ...categoryButtons,
+        ], { columns: 2 });
+
+        update
+            ? await ctx.editMessageText(`Новая транзакция:\n\n${this.format(ctx)}`, {
+                ...markup,
+                parse_mode: "HTML"
+            })
+            : await ctx.replyWithHTML(`Новая транзакция:\n\n${this.format(ctx)}`, markup);
+    }
+
+
+    private format(ctx: TelegrafSceneContext<ExpensesWizardData>) {
+        const { category, sum, date } = ctx.scene.session;
+        return `<b>${date ?? "{{DATE}}"}</b> - <b>${sum ?? "{{SUM}}"} - <b>${category ?? "{{CATEGORY}}"}</b></b>`;
     }
 }
