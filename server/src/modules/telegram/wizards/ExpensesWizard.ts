@@ -13,6 +13,7 @@ import { CategoriesService } from "../../categories/categories.service";
 import { CallbackQuery } from "typegram/callback";
 import { Message } from "telegraf/typings/core/types/typegram";
 import { parse, isMatch, add, format } from "date-fns";
+import { TransactionsService } from "../../transactions/transactions.service";
 
 const SCENE_ID = "EXPENSES_WIZARD";
 
@@ -31,7 +32,11 @@ const dateFormat = "dd.MM.yyyy";
 //TODO (byTimo) общее решение по логированию шагов визардов и сцен
 @Scene(SCENE_ID)
 export class ExpensesWizard {
-    constructor(private readonly logger: Logger, private readonly categories: CategoriesService) {
+    constructor(
+        private readonly logger: Logger,
+        private readonly categories: CategoriesService,
+        private readonly transactions: TransactionsService
+    ) {
     }
 
     static async enter(ctx: TelegrafContext, initialState: ExpensesInitialState) {
@@ -65,6 +70,12 @@ export class ExpensesWizard {
         ctx: TelegrafSceneContext<ExpensesWizardData>
     ): Promise<void> {
         if (callbackQuery.data === "ok") {
+            const {date, sum, category} = ctx.scene.session;
+            if(!date || !sum || !category) {
+                throw new Error("Bad data in session");
+            }
+
+            await this.transactions.save({date, sum, category});
             await ctx.editMessageText(
                 `${this.format(ctx)}\n\nТранзакция сохранена`,
                 { ...Markup.inlineKeyboard([]), parse_mode: "HTML" }

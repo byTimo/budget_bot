@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { google, sheets_v4 } from "googleapis";
 import { GoogleAuthService } from "../auth/googleAuth.service";
-import { InternalType } from "./googleSheets.contracts";
+import { InternalType, ValueRange } from "./googleSheets.contracts";
 import { ConfigService } from "../../config/config.service";
 import Sheets = sheets_v4.Sheets;
 
@@ -44,5 +44,18 @@ export class GoogleSheetsService {
         }
 
         return result.data.values[0].slice(1);
+    }
+
+    public async write(valueRange: ValueRange): Promise<any> {
+        this.logger.log(`[GOOGLE] append data by ${valueRange.range}`);
+
+        //TODO (byTimo) Error if loose
+        const result = await this.sheets.spreadsheets.values.append({
+            spreadsheetId: this.config.googleSheetsId,
+            range: valueRange.range,
+            valueInputOption: "USER_ENTERED",
+            insertDataOption: "INSERT_ROWS",
+            requestBody: valueRange,
+        });
     }
 }

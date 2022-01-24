@@ -12,6 +12,7 @@ import { LoggerModule } from "../logger/logger.module";
 import { telegrafLogger } from "./middlewares/logger.middleware";
 import { ExpensesWizard } from "./wizards/ExpensesWizard";
 import { CategoriesModule } from "../categories/categories.module";
+import { TransactionsModule } from "../transactions/transactions.module";
 
 const scenes = [
     SettingsScene,
@@ -36,6 +37,7 @@ const wizards = [
         GoogleAuthModule,
         LoggerModule,
         CategoriesModule,
+        TransactionsModule,
     ],
     providers: [
         TelegramUpdate,
