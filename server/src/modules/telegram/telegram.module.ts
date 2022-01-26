@@ -13,6 +13,7 @@ import { telegrafLogger } from "./middlewares/logger.middleware";
 import { ExpensesWizard } from "./wizards/ExpensesWizard";
 import { CategoriesModule } from "../categories/categories.module";
 import { TransactionsModule } from "../transactions/transactions.module";
+import { TemplatesModule } from "../templates/templates.module";
 
 const scenes = [
     SettingsScene,
@@ -38,6 +39,7 @@ const wizards = [
         LoggerModule,
         CategoriesModule,
         TransactionsModule,
+        TemplatesModule,
     ],
     providers: [
         TelegramUpdate,
