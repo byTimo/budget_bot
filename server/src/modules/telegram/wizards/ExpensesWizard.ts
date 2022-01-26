@@ -14,6 +14,7 @@ import { CallbackQuery } from "typegram/callback";
 import { Message } from "telegraf/typings/core/types/typegram";
 import { parse, isMatch, add, format } from "date-fns";
 import { TransactionsService } from "../../transactions/transactions.service";
+import { TemplatesService } from "../../templates/templates.service";
 
 const SCENE_ID = "EXPENSES_WIZARD";
 
@@ -35,7 +36,8 @@ export class ExpensesWizard {
     constructor(
         private readonly logger: Logger,
         private readonly categories: CategoriesService,
-        private readonly transactions: TransactionsService
+        private readonly transactions: TransactionsService,
+        private readonly templates: TemplatesService,
     ) {
     }
 
@@ -70,14 +72,15 @@ export class ExpensesWizard {
         ctx: TelegrafSceneContext<ExpensesWizardData>
     ): Promise<void> {
         if (callbackQuery.data === "ok") {
-            const {date, sum, category} = ctx.scene.session;
-            if(!date || !sum || !category) {
+            const { date, sum, category } = ctx.scene.session;
+            if (!date || !sum || !category) {
                 throw new Error("Bad data in session");
             }
 
-            await this.transactions.save({date, sum, category});
+            await this.transactions.save({ date, sum, category });
+            const message = await this.templates.render("transactionSaved", { date, sum, category });
             await ctx.editMessageText(
-                `${this.format(ctx)}\n\nТранзакция сохранена`,
+                message,
                 { ...Markup.inlineKeyboard([]), parse_mode: "HTML" }
             );
             return ctx.scene.leave();
@@ -134,17 +137,13 @@ export class ExpensesWizard {
             ...categoryButtons,
         ], { columns: 2 });
 
+        const message = await this.templates.render("newTransaction", ctx.scene.session);
+
         update
-            ? await ctx.editMessageText(`Новая транзакция:\n\n${this.format(ctx)}`, {
+            ? await ctx.editMessageText(message, {
                 ...markup,
                 parse_mode: "HTML"
             })
-            : await ctx.replyWithHTML(`Новая транзакция:\n\n${this.format(ctx)}`, markup);
-    }
-
-
-    private format(ctx: TelegrafSceneContext<ExpensesWizardData>) {
-        const { category, sum, date } = ctx.scene.session;
-        return `<b>${date ?? "{{DATE}}"}</b> - <b>${sum ?? "{{SUM}}"} - <b>${category ?? "{{CATEGORY}}"}</b></b>`;
+            : await ctx.replyWithHTML(message, markup);
     }
 }
