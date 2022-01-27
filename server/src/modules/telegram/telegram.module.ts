@@ -14,6 +14,7 @@ import { ExpensesWizard } from "./wizards/ExpensesWizard";
 import { CategoriesModule } from "../categories/categories.module";
 import { TransactionsModule } from "../transactions/transactions.module";
 import { TemplatesModule } from "../templates/templates.module";
+import { DatesModule } from "../dates/dates.module";
 
 const scenes = [
     SettingsScene,
@@ -38,6 +39,7 @@ const wizards = [
         GoogleAuthModule,
         LoggerModule,
         CategoriesModule,
+        DatesModule,
         TransactionsModule,
         TemplatesModule,
     ],

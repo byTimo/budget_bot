@@ -1,20 +1,18 @@
 import { Action, Scene, SceneEnter, Hears } from "nestjs-telegraf";
-import { TelegrafContext, TelegrafSceneContext } from "../../../types/telegraf";
 import {
-    isCallbackQueryUpdate,
-    isDataCallbackQuery,
-    restoreSessionData,
-    isMessageUpdate,
-    isTextMessage
-} from "../../../utils/telegraf";
+    TelegrafContext,
+    TelegrafSceneContext,
+    TelegrafTextSceneContext,
+    TelegrafActionSceneContext
+} from "../../../types/telegraf";
+import { restoreSessionData } from "../../../utils/telegraf";
 import { Scenes, Markup } from "telegraf";
 import { Logger } from "@nestjs/common";
 import { CategoriesService } from "../../categories/categories.service";
-import { CallbackQuery } from "typegram/callback";
-import { Message } from "telegraf/typings/core/types/typegram";
-import { parse, isMatch, add, format } from "date-fns";
+import { isMatch } from "date-fns";
 import { TransactionsService } from "../../transactions/transactions.service";
 import { TemplatesService } from "../../templates/templates.service";
+import { DatesService } from "../../dates/dates.service";
 
 const SCENE_ID = "EXPENSES_WIZARD";
 
@@ -28,14 +26,13 @@ interface ExpensesWizardData extends Scenes.WizardSessionData {
     category?: string;
 }
 
-const dateFormat = "dd.MM.yyyy";
-
 //TODO (byTimo) общее решение по логированию шагов визардов и сцен
 @Scene(SCENE_ID)
 export class ExpensesWizard {
     constructor(
         private readonly logger: Logger,
         private readonly categories: CategoriesService,
+        private readonly dates: DatesService,
         private readonly transactions: TransactionsService,
         private readonly templates: TemplatesService,
     ) {
@@ -50,58 +47,53 @@ export class ExpensesWizard {
         restoreSessionData<ExpensesWizardData, ExpensesInitialState>(ctx, x => x);
         const categories = await this.categories.popular();
         ctx.scene.session.category = categories[0];
-        ctx.scene.session.date = format(new Date(), dateFormat);
-
+        ctx.scene.session.date = this.dates.suggestInitialDate();
         return this.display(ctx);
     }
 
+    @Action("ok")
+    async handleSaveAction(ctx: TelegrafActionSceneContext<ExpensesWizardData>): Promise<void> {
+        const { date, sum, category } = ctx.scene.session;
+        if (!date || !sum || !category) {
+            throw new Error("Bad data in session");
+        }
+
+        await this.transactions.save({ date, sum, category });
+        const message = await this.templates.render("transactionSaved", { date, sum, category });
+        await ctx.editMessageText(
+            message,
+            { ...Markup.inlineKeyboard([]), parse_mode: "HTML" }
+        );
+        this.dates.saveLastUsed(date);
+        return ctx.scene.leave();
+    }
+
+    @Action(/\d\d\.\d\d\.\d\d\d\d/)
+    async handleDateAction(ctx: TelegrafActionSceneContext<ExpensesWizardData>): Promise<void> {
+        const data = ctx.update.callback_query.data;
+        if (isMatch(data, DatesService.dateFormat)) {
+            return this.modifyDate(data, ctx, false);
+        }
+        return this.handleAction(ctx);
+    }
+
     @Action(/.*/)
+    async handleAction(ctx: TelegrafActionSceneContext<ExpensesWizardData>): Promise<void> {
+        return this.modifyCategory(ctx.update.callback_query.data, ctx, true);
+    }
+
+    @Hears(/\d\d\.\d\d\.\d\d\d\d/)
+    async handleDateText(ctx: TelegrafTextSceneContext<ExpensesWizardData>): Promise<void> {
+        const text = ctx.update.message.text;
+        if (isMatch(text, DatesService.dateFormat)) {
+            return this.modifyDate(text, ctx, false);
+        }
+        return this.handleText(ctx);
+    }
+
     @Hears(/.*/)
-    async handle(ctx: TelegrafSceneContext<ExpensesWizardData>): Promise<void> {
-        if (isCallbackQueryUpdate(ctx.update) && isDataCallbackQuery(ctx.update.callback_query)) {
-            return this.handleCallbackQuery(ctx.update.callback_query, ctx);
-        }
-
-        if (isMessageUpdate(ctx.update) && isTextMessage(ctx.update.message)) {
-            return this.handleTextMessage(ctx.update.message, ctx);
-        }
-    }
-
-    private async handleCallbackQuery(
-        callbackQuery: CallbackQuery.DataCallbackQuery,
-        ctx: TelegrafSceneContext<ExpensesWizardData>
-    ): Promise<void> {
-        if (callbackQuery.data === "ok") {
-            const { date, sum, category } = ctx.scene.session;
-            if (!date || !sum || !category) {
-                throw new Error("Bad data in session");
-            }
-
-            await this.transactions.save({ date, sum, category });
-            const message = await this.templates.render("transactionSaved", { date, sum, category });
-            await ctx.editMessageText(
-                message,
-                { ...Markup.inlineKeyboard([]), parse_mode: "HTML" }
-            );
-            return ctx.scene.leave();
-        }
-
-        if (isMatch(callbackQuery.data, dateFormat)) {
-            return this.modifyDate(callbackQuery.data, ctx, true);
-        }
-
-        return this.modifyCategory(callbackQuery.data, ctx, true);
-    }
-
-    private handleTextMessage(
-        message: Message.TextMessage,
-        ctx: TelegrafSceneContext<ExpensesWizardData>
-    ): Promise<void> {
-        if (isMatch(message.text, dateFormat)) {
-            return this.modifyDate(message.text, ctx, false);
-        }
-
-        return this.modifyCategory(message.text, ctx, false);
+    async handleText(ctx: TelegrafTextSceneContext<ExpensesWizardData>): Promise<void> {
+        return this.modifyCategory(ctx.update.message.text, ctx, false);
     }
 
     private modifyDate(date: string, ctx: TelegrafSceneContext<ExpensesWizardData>, update: boolean): Promise<void> {
@@ -122,9 +114,9 @@ export class ExpensesWizard {
         const { date, sum, category } = ctx.scene.session;
         const categories = await this.categories.popular();
 
-        const dateButtons = Array.from({ length: 4 })
-            .map((_, i) => format(add(parse(date!, dateFormat, new Date()), { days: -i - 1 }), dateFormat))
-            .map(x => Markup.button.callback(x, x));
+        const dateButtons =
+            this.dates.suggestFastDates(date)
+                .map(x => Markup.button.callback(x, x));
 
         const categoryButtons = categories
             .filter(x => x !== category)
@@ -133,6 +125,7 @@ export class ExpensesWizard {
 
         const markup = Markup.inlineKeyboard([
             Markup.button.callback("Ok", "ok"),
+            Markup.button.callback("Отмена", "cancel"),
             ...dateButtons,
             ...categoryButtons,
         ], { columns: 2 });
