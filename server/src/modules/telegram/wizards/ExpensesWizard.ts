@@ -1,11 +1,11 @@
-import { Action, Scene, SceneEnter, Hears } from "nestjs-telegraf";
+import { Action, Scene, SceneEnter, Hears, SceneLeave } from "nestjs-telegraf";
 import {
     TelegrafContext,
     TelegrafSceneContext,
     TelegrafTextSceneContext,
     TelegrafActionSceneContext
 } from "../../../types/telegraf";
-import { restoreSessionData } from "../../../utils/telegraf";
+import { restoreSessionData, updateOrResendHtml } from "../../../utils/telegraf";
 import { Scenes, Markup } from "telegraf";
 import { Logger } from "@nestjs/common";
 import { CategoriesService } from "../../categories/categories.service";
@@ -13,6 +13,8 @@ import { isMatch } from "date-fns";
 import { TransactionsService } from "../../transactions/transactions.service";
 import { TemplatesService } from "../../templates/templates.service";
 import { DatesService } from "../../dates/dates.service";
+import { chain } from "iterable-chain";
+import { zip } from "../../../utils/chain";
 
 const SCENE_ID = "EXPENSES_WIZARD";
 
@@ -21,7 +23,7 @@ export interface ExpensesInitialState {
 }
 
 interface ExpensesWizardData extends Scenes.WizardSessionData {
-    sum?: number;
+    sum: number;
     date?: string;
     category?: string;
 }
@@ -29,6 +31,8 @@ interface ExpensesWizardData extends Scenes.WizardSessionData {
 //TODO (byTimo) общее решение по логированию шагов визардов и сцен
 @Scene(SCENE_ID)
 export class ExpensesWizard {
+    private lastBotMessageId?: number;
+
     constructor(
         private readonly logger: Logger,
         private readonly categories: CategoriesService,
@@ -45,10 +49,14 @@ export class ExpensesWizard {
     @SceneEnter()
     async handleEnter(ctx: TelegrafSceneContext<ExpensesWizardData>) {
         restoreSessionData<ExpensesWizardData, ExpensesInitialState>(ctx, x => x);
-        const categories = await this.categories.popular();
-        ctx.scene.session.category = categories[0];
-        ctx.scene.session.date = this.dates.suggestInitialDate();
-        return this.display(ctx);
+        ctx.scene.session.category = await this.categories.suggestInitial();
+        ctx.scene.session.date = this.dates.suggestInitial();
+        return this.display(ctx, true);
+    }
+
+    @SceneLeave()
+    handleLeave() {
+        this.lastBotMessageId = undefined;
     }
 
     @Action("ok")
@@ -59,13 +67,30 @@ export class ExpensesWizard {
         }
 
         await this.transactions.save({ date, sum, category });
-        const message = await this.templates.render("transactionSaved", { date, sum, category });
-        await ctx.editMessageText(
-            message,
-            { ...Markup.inlineKeyboard([]), parse_mode: "HTML" }
+        const text = await this.templates.render("transactionSaved", { date, sum, category });
+        this.lastBotMessageId = await updateOrResendHtml(ctx, text);
+        await ctx.scene.leave();
+    }
+
+    @Action("cancel")
+    async handleCancelAction(ctx: TelegrafActionSceneContext<ExpensesWizardData>): Promise<void> {
+        const text = await this.templates.render("transactionCanceled", ctx.scene.session);
+        await ctx.editMessageText(text, { ...Markup.inlineKeyboard([]), parse_mode: "HTML" });
+        await ctx.scene.leave();
+    }
+
+    @Action("more_categories")
+    async handleMoreCategoriesAction(ctx: TelegrafActionSceneContext<ExpensesWizardData>): Promise<void> {
+        const { category } = ctx.scene.session;
+        const categories = await this.categories.suggestAll();
+
+        const markup = Markup.inlineKeyboard(
+            categories.map(x => Markup.button.callback(x === category ? `✅ ${x}` : x, x)),
+            { columns: categories.length % 3 === 0 ? 3 : 4 }
         );
-        this.dates.saveLastUsed(date);
-        return ctx.scene.leave();
+
+        const text = await this.templates.render("newTransaction", ctx.scene.session);
+        this.lastBotMessageId = await updateOrResendHtml(ctx, text, markup, this.lastBotMessageId);
     }
 
     @Action(/\d\d\.\d\d\.\d\d\d\d/)
@@ -79,64 +104,69 @@ export class ExpensesWizard {
 
     @Action(/.*/)
     async handleAction(ctx: TelegrafActionSceneContext<ExpensesWizardData>): Promise<void> {
-        return this.modifyCategory(ctx.update.callback_query.data, ctx, true);
+        return this.modifyCategory(ctx.update.callback_query.data, ctx, false);
     }
 
     @Hears(/\d\d\.\d\d\.\d\d\d\d/)
     async handleDateText(ctx: TelegrafTextSceneContext<ExpensesWizardData>): Promise<void> {
         const text = ctx.update.message.text;
         if (isMatch(text, DatesService.dateFormat)) {
-            return this.modifyDate(text, ctx, false);
+            return this.modifyDate(text, ctx, true);
         }
         return this.handleText(ctx);
     }
 
     @Hears(/.*/)
     async handleText(ctx: TelegrafTextSceneContext<ExpensesWizardData>): Promise<void> {
-        return this.modifyCategory(ctx.update.message.text, ctx, false);
+        return this.modifyCategory(ctx.update.message.text, ctx, true);
     }
 
-    private modifyDate(date: string, ctx: TelegrafSceneContext<ExpensesWizardData>, update: boolean): Promise<void> {
+    private modifyDate(
+        date: string,
+        ctx: TelegrafSceneContext<ExpensesWizardData>,
+        sendNewMessage: boolean
+    ): Promise<void> {
         ctx.scene.session.date = date;
-        return this.display(ctx, update);
+        this.dates.saveLastUsed(date);
+        return this.display(ctx, sendNewMessage);
     }
 
     private modifyCategory(
         category: string,
         ctx: TelegrafSceneContext<ExpensesWizardData>,
-        update: boolean
+        sendNewMessage: boolean
     ): Promise<void> {
         ctx.scene.session.category = category;
-        return this.display(ctx, update);
+        return this.display(ctx, sendNewMessage);
     }
 
-    private async display(ctx: TelegrafSceneContext<ExpensesWizardData>, update = false): Promise<void> {
-        const { date, sum, category } = ctx.scene.session;
-        const categories = await this.categories.popular();
+    private async display(ctx: TelegrafSceneContext<ExpensesWizardData>, sendNewMessage: boolean): Promise<void> {
+        const { date, category } = ctx.scene.session;
+        const categories = await this.categories.suggestFast(category);
 
-        const dateButtons =
-            this.dates.suggestFastDates(date)
-                .map(x => Markup.button.callback(x, x));
-
-        const categoryButtons = categories
-            .filter(x => x !== category)
-            .slice(0, 4)
+        const dateButtons = chain(this.dates.suggestFast(date))
             .map(x => Markup.button.callback(x, x));
 
-        const markup = Markup.inlineKeyboard([
-            Markup.button.callback("Ok", "ok"),
-            Markup.button.callback("Отмена", "cancel"),
-            ...dateButtons,
-            ...categoryButtons,
-        ], { columns: 2 });
+        const categoryButtons = chain(categories)
+            .map(x => Markup.button.callback(x, x));
 
-        const message = await this.templates.render("newTransaction", ctx.scene.session);
+        const markup = Markup.inlineKeyboard(
+            zip(dateButtons, categoryButtons)
+                .flatMap(x => x)
+                //TODO (byTimo) bag in chain
+                .append(Markup.button.callback("Отмена", "cancel"))
+                //TODO (byTimo) bag in chain
+                .append(Markup.button.callback("Ok", "ok"))
+                //TODO (byTimo) bag in chain
+                .prepend(Markup.button.callback("Больше дат", "more_dates"))
+                //TODO (byTimo) bag in chain
+                .prepend(Markup.button.callback("Больше категорий", "more_categories"))
+                .toArray(),
+            { columns: 2 }
+        );
 
-        update
-            ? await ctx.editMessageText(message, {
-                ...markup,
-                parse_mode: "HTML"
-            })
-            : await ctx.replyWithHTML(message, markup);
+        const text = await this.templates.render("newTransaction", ctx.scene.session);
+
+        this.lastBotMessageId = await updateOrResendHtml(ctx, text, markup, this.lastBotMessageId, sendNewMessage);
     }
 }

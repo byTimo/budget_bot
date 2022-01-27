@@ -6,7 +6,8 @@ export interface Templates {
         category?: string;
     },
     newTransaction: Templates["transaction"];
-    transactionSaved?: Templates["transaction"];
+    transactionSaved: Templates["transaction"];
+    transactionCanceled: Templates["transaction"];
 }
 
 export type TemplateType = keyof Templates;
@@ -20,7 +21,10 @@ export const templateMetaMap: Partial<Record<TemplateType, TemplateMeta>> = {
         partials: ["transaction"],
     },
     transactionSaved: {
-        partials: ["transaction"]
+        partials: ["transaction"],
+    },
+    transactionCanceled: {
+        partials: ["transaction"],
     }
 };
 

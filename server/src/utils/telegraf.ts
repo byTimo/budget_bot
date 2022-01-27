@@ -1,7 +1,9 @@
 import type { Update, Message } from "telegraf/typings/core/types/typegram";
 import { CallbackQuery } from "typegram/callback";
-import { TelegrafWizardContext, TelegrafSceneContext } from "../types/telegraf";
+import { TelegrafWizardContext, TelegrafSceneContext, TelegrafContext } from "../types/telegraf";
 import { WizardSessionData, SceneSessionData } from "telegraf/typings/scenes";
+import { Markup } from "telegraf";
+import { InlineKeyboardMarkup } from "telegraf/src/core/types/typegram";
 
 export function isMessageUpdate(update: Update.AbstractUpdate): update is Update.MessageUpdate {
     return "message" in update;
@@ -35,4 +37,22 @@ export function restoreSessionData(
     for (const key in session) {
         ctx.scene.session[key] = session[key];
     }
+}
+
+export async function updateOrResendHtml<T extends SceneSessionData = SceneSessionData>(
+    ctx: TelegrafContext<T>,
+    text: string,
+    markup: Markup.Markup<InlineKeyboardMarkup> = Markup.inlineKeyboard([]),
+    prevMessageId?: number,
+    forceResend?: boolean,
+): Promise<number> {
+    if (forceResend || !prevMessageId) {
+        const message = await ctx.replyWithHTML(text, markup);
+        if (prevMessageId) {
+            await ctx.deleteMessage(prevMessageId);
+        }
+        return message.message_id;
+    }
+    await ctx.editMessageText(text, {...markup, parse_mode: "HTML"});
+    return prevMessageId;
 }

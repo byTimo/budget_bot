@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { format, add, parse, isAfter } from "date-fns";
+import { chain } from "iterable-chain";
 
 const dateFormat = "dd.MM.yyyy";
 
@@ -14,7 +15,7 @@ export class DatesService {
         return dateFormat;
     }
 
-    public suggestInitialDate(): string {
+    public suggestInitial(): string {
         return this._lastUsed ?? this.now();
     }
 
@@ -23,22 +24,25 @@ export class DatesService {
         this.logger.log(`Date ${date} was saved`);
     }
 
-    public suggestFastDates(current?: string): string[] {
+    public suggestFast(current?: string): string[] {
         const basis = current || this._lastUsed
             ? parse(current || this._lastUsed!, dateFormat, new Date())
             : new Date();
         const yesterday = add(new Date(), { days: -1 });
 
         if (isAfter(yesterday, basis)) {
-            return [
-                this.now(),
-                ...Array.from({ length: 3 })
-                    .map((_, i) => format(add(basis, { days: 1 - i }), dateFormat))
-            ];
+            return chain.range(-1, 3)
+                .map(x => add(basis, { days: -x }))
+                .map(x => format(x, dateFormat))
+                //TODO (byTimo) bag in chain
+                .append(this.now())
+                .toArray();
         }
 
-        return Array.from({ length: 4 })
-            .map((_, i) => format(add(basis, { days: -i - 1 }), dateFormat));
+        return chain.range(1, 4)
+            .map(x => add(basis, { days: -x }))
+            .map(x => format(x, dateFormat))
+            .toArray();
     }
 
     public now(): string {

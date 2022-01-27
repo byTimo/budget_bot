@@ -1,7 +1,7 @@
 import { SceneContext, WizardContext, WizardSessionData, SceneSessionData } from "telegraf/typings/scenes";
 import type { Update, Message, CallbackQuery } from "telegraf/typings/core/types/typegram";
 
-export type TelegrafContext = SceneContext;
+export type TelegrafContext<T extends SceneSessionData = SceneSessionData> = SceneContext<T>;
 
 export type TelegrafSceneContext<T extends SceneSessionData = SceneSessionData> = SceneContext<T>
 export type TelegrafTextSceneContext<T extends SceneSessionData = SceneSessionData> =
