@@ -1,7 +1,10 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService as DefaultConfigService } from "@nestjs/config";
 
-const TOKEN = "TELEGRAM_TOKEN";
+const TELEGRAM_TOKEN = "TELEGRAM_TOKEN";
+const TELEGRAM_WEBHOOK_DOMAIN = "TELEGRAM_WEBHOOK_DOMAIN";
+const TELEGRAM_WEBHOOK_HOST = "TELEGRAM_WEBHOOK_HOST";
+const TELEGRAM_WEBHOOK_PORT = "TELEGRAM_WEBHOOK_PORT";
 const GOOGLE_CLIENT_ID = "GOOGLE_CLIENT_ID";
 const GOOGLE_CLIENT_SECRET = "GOOGLE_CLIENT_SECRET";
 const GOOGLE_SHEETS_ID = "GOOGLE_SHEETS_ID";
@@ -13,7 +16,19 @@ export class ConfigService {
     }
 
     public get telegramToken(): string {
-        return this.getOrThrow<string>(TOKEN);
+        return this.getOrThrow<string>(TELEGRAM_TOKEN);
+    }
+
+    public get telegramWebhookDomain(): string | undefined {
+        return this.configService.get<string>(TELEGRAM_WEBHOOK_DOMAIN);
+    }
+
+    public get telegramWebhookHost(): string | undefined {
+        return this.configService.get<string>(TELEGRAM_WEBHOOK_HOST);
+    }
+
+    public get telegramWebhookPort(): number | undefined {
+        return this.configService.get<number>(TELEGRAM_WEBHOOK_PORT);
     }
 
     public get googleClientId(): string {

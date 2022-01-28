@@ -1,7 +1,7 @@
 import { Module, Logger } from "@nestjs/common";
 import { ConfigModule } from "../config/config.module";
 import { ConfigService } from "../config/config.service";
-import { session } from "telegraf";
+import { session, Telegraf } from "telegraf";
 import { TelegrafModule } from "nestjs-telegraf";
 import { SettingsScene } from "./scenes/SettingsScene";
 import { TelegramUpdate } from "./telegram.update";
@@ -26,15 +26,40 @@ const wizards = [
     ExpensesWizard,
 ];
 
+function buildWebhookOptions(config: ConfigService): Telegraf.LaunchOptions["webhook"] {
+    const domain = config.telegramWebhookDomain;
+    const host = config.telegramWebhookHost;
+    const port = config.telegramWebhookPort;
+
+    if(domain && host && port) {
+        return {
+            host,
+            port,
+            domain,
+        }
+    }
+
+    return undefined;
+}
+
 @Module({
     imports: [
         TelegrafModule.forRootAsync({
             imports: [ConfigModule, LoggerModule],
             inject: [ConfigService, Logger],
-            useFactory: (config: ConfigService, logger: Logger) => ({
-                token: config.telegramToken,
-                middlewares: [session(), telegrafLogger(logger)],
-            })
+            useFactory: (config: ConfigService, logger: Logger) => {
+                const webhook = buildWebhookOptions(config);
+                if(webhook) {
+                    logger.log("Telegram webhook was configured");
+                }
+                return {
+                    token: config.telegramToken,
+                    middlewares: [session(), telegrafLogger(logger)],
+                    launchOptions: {
+                        webhook,
+                    }
+                }
+            }
         }),
         GoogleAuthModule,
         LoggerModule,
