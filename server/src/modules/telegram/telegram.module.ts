@@ -15,6 +15,8 @@ import { CategoriesModule } from "../categories/categories.module";
 import { TransactionsModule } from "../transactions/transactions.module";
 import { TemplatesModule } from "../templates/templates.module";
 import { DatesModule } from "../dates/dates.module";
+import { TunnelModule } from "../tunnel/tunnel.module";
+import { TunnelService } from "../tunnel/tunnel.service";
 
 const scenes = [
     SettingsScene,
@@ -26,31 +28,24 @@ const wizards = [
     ExpensesWizard,
 ];
 
-function buildWebhookOptions(config: ConfigService): Telegraf.LaunchOptions["webhook"] {
-    const domain = config.telegramWebhookDomain;
-    const host = config.telegramWebhookHost;
-    const port = config.telegramWebhookPort;
-
-    if(domain && host && port) {
-        return {
-            host,
-            port,
-            domain,
-        }
-    }
-
-    return undefined;
+function buildWebhookOptions(config: ConfigService, domain: string): Telegraf.LaunchOptions["webhook"] {
+    return {
+        domain,
+        hookPath: "/tg_hook",
+        port: config.telegramWebhookPort,
+    };
 }
 
 @Module({
     imports: [
         TelegrafModule.forRootAsync({
-            imports: [ConfigModule, LoggerModule],
-            inject: [ConfigService, Logger],
-            useFactory: (config: ConfigService, logger: Logger) => {
-                const webhook = buildWebhookOptions(config);
-                if(webhook) {
-                    logger.log("Telegram webhook was configured");
+            imports: [ConfigModule, LoggerModule, TunnelModule],
+            inject: [ConfigService, Logger, TunnelService],
+            useFactory: async (config: ConfigService, logger: Logger, tunnel: TunnelService) => {
+                const domain = await tunnel.getPublic();
+                const webhook = buildWebhookOptions(config, domain);
+                if (webhook) {
+                    logger.log(`The telegram webhook was configured at ${webhook.domain}`);
                 }
                 return {
                     token: config.telegramToken,
@@ -58,7 +53,7 @@ function buildWebhookOptions(config: ConfigService): Telegraf.LaunchOptions["web
                     launchOptions: {
                         webhook,
                     }
-                }
+                };
             }
         }),
         GoogleAuthModule,

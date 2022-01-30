@@ -1,10 +1,9 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService as DefaultConfigService } from "@nestjs/config";
 
+const SERVER_PORT = "SERVER_PORT";
+const TELEGRAM_HOOK_PORT = "TELEGRAM_HOOK_PORT";
 const TELEGRAM_TOKEN = "TELEGRAM_TOKEN";
-const TELEGRAM_WEBHOOK_DOMAIN = "TELEGRAM_WEBHOOK_DOMAIN";
-const TELEGRAM_WEBHOOK_HOST = "TELEGRAM_WEBHOOK_HOST";
-const TELEGRAM_WEBHOOK_PORT = "TELEGRAM_WEBHOOK_PORT";
 const GOOGLE_CLIENT_ID = "GOOGLE_CLIENT_ID";
 const GOOGLE_CLIENT_SECRET = "GOOGLE_CLIENT_SECRET";
 const GOOGLE_SHEETS_ID = "GOOGLE_SHEETS_ID";
@@ -15,20 +14,16 @@ export class ConfigService {
     constructor(private configService: DefaultConfigService) {
     }
 
+    public get port(): number {
+        return this.getOrDefault<number>(SERVER_PORT, 3000);
+    }
+
+    public get telegramWebhookPort(): number {
+        return this.getOrDefault<number>(TELEGRAM_HOOK_PORT, 3001);
+    }
+
     public get telegramToken(): string {
         return this.getOrThrow<string>(TELEGRAM_TOKEN);
-    }
-
-    public get telegramWebhookDomain(): string | undefined {
-        return this.configService.get<string>(TELEGRAM_WEBHOOK_DOMAIN);
-    }
-
-    public get telegramWebhookHost(): string | undefined {
-        return this.configService.get<string>(TELEGRAM_WEBHOOK_HOST);
-    }
-
-    public get telegramWebhookPort(): number | undefined {
-        return this.configService.get<number>(TELEGRAM_WEBHOOK_PORT);
     }
 
     public get googleClientId(): string {
@@ -54,5 +49,9 @@ export class ConfigService {
         }
 
         throw new Error(`Can't find ${path} in config`);
+    }
+
+    private getOrDefault<T>(path: string, defaultValue: T): T {
+        return this.configService.get<T>(path) ?? defaultValue;
     }
 }

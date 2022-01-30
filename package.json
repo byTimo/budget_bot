@@ -4,7 +4,9 @@
   "description": "Server-side part of budget bot for me",
   "main": "index.js",
   "scripts": {
-    "dev": "cd server/ && npm run start:dev"
+    "bootstrap": "cd server/ && npm install",
+    "dev": "cd server/ && npm run start:dev",
+    "build": "cd server/ && npm run build"
   },
   "keywords": [
     "telegram",
