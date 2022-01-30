@@ -68,7 +68,7 @@ export class ExpensesWizard {
 
         await this.transactions.save({ date, sum, category });
         const text = await this.templates.render("transactionSaved", { date, sum, category });
-        this.lastBotMessageId = await updateOrResendHtml(ctx, text);
+        this.lastBotMessageId = await updateOrResendHtml(ctx, this.lastBotMessageId, text);
         await ctx.scene.leave();
     }
 
@@ -90,7 +90,7 @@ export class ExpensesWizard {
         );
 
         const text = await this.templates.render("newTransaction", ctx.scene.session);
-        this.lastBotMessageId = await updateOrResendHtml(ctx, text, markup, this.lastBotMessageId);
+        this.lastBotMessageId = await updateOrResendHtml(ctx, this.lastBotMessageId, text, markup);
     }
 
     @Action(/\d\d\.\d\d\.\d\d\d\d/)
@@ -167,6 +167,6 @@ export class ExpensesWizard {
 
         const text = await this.templates.render("newTransaction", ctx.scene.session);
 
-        this.lastBotMessageId = await updateOrResendHtml(ctx, text, markup, this.lastBotMessageId, sendNewMessage);
+        this.lastBotMessageId = await updateOrResendHtml(ctx, this.lastBotMessageId, text, markup, sendNewMessage);
     }
 }

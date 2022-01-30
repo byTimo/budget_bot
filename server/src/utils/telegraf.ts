@@ -41,9 +41,9 @@ export function restoreSessionData(
 
 export async function updateOrResendHtml<T extends SceneSessionData = SceneSessionData>(
     ctx: TelegrafContext<T>,
+    prevMessageId: number | undefined,
     text: string,
     markup: Markup.Markup<InlineKeyboardMarkup> = Markup.inlineKeyboard([]),
-    prevMessageId?: number,
     forceResend?: boolean,
 ): Promise<number> {
     if (forceResend || !prevMessageId) {
